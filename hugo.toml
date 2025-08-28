@@ -2,7 +2,7 @@
 # The base URL of your site (required). This will be prepended to all relative URLs.
 baseURL = "https://bishtrk.github.io/hugotest/"
 # Make relative links absolute so they work when the site is served from a subpath
-canonifyURLs = true
+#canonifyURLs = true
 # Title of your website (required).
 title = "Hugoplate"
 # Your theme name
