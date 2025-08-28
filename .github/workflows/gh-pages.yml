@@ -1,0 +1,39 @@
+name: Build and deploy Hugo site to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main   # change if your primary branch is different (e.g. master)
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # fetch full history so actions that need tags/versions/subtrees work
+          fetch-depth: 0
+          # if your theme is a git submodule, keep this; otherwise harmless
+          submodules: recursive
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: '0.111.0'   # change to the Hugo version you prefer
+          extended: true            # set false if you don't need the extended build
+
+      - name: Build site
+        run: hugo --minify
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          publish_dir: ./public
+          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
