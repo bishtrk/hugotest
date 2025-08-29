@@ -1,39 +1,95 @@
-name: Build and deploy Hugo site to GitHub Pages
+name: Deploy Hugo site to Pages
 
 on:
   push:
-    branches:
-      - main   # change if your primary branch is different (e.g. master)
+    branches: ["main"]
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# site-wide environment; change values to match your local setup if needed
+env:
+  HUGO_ENV: production
+  HUGO_VERSION: "0.147.3"   # change to the Hugo version that works locally
+  GO_VERSION: "1.23.3"      # change if you need a different Go version
+  NODE_VERSION: "18"        # Node LTS (change if needed)
+  # Optional Tina/Netlify/Tokens (keep only if your build uses them)
+  TINA_CLIENT_ID: ${{ secrets.TINA_CLIENT_ID }}
+  TINA_TOKEN: ${{ secrets.TINA_TOKEN }}
+  TINA_SEARCH_TOKEN: ${{ secrets.TINA_SEARCH_TOKEN }}
+
 jobs:
-  build-and-deploy:
+  build:
+    name: Build site (install Go, Node, Hugo)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # fetch full history so actions that need tags/versions/subtrees work
-          fetch-depth: 0
-          # if your theme is a git submodule, keep this; otherwise harmless
           submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Go (needed for Hugo modules)
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v2
         with:
-          hugo-version: '0.111.0'   # change to the Hugo version you prefer
-          extended: true            # set false if you don't need the extended build
+          hugo-version: ${{ env.HUGO_VERSION }}
+          extended: true
+
+      - name: Install npm dependencies (if present)
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            echo "No package.json — skipping npm install"
+          fi
+
+      - name: Project setup (optional)
+        run: |
+          if [ -f package.json ] && npm run | grep -q "project-setup"; then
+            npm run project-setup
+          else
+            echo "No project-setup script — skipping"
+          fi
+
+      - name: Setup Pages (prepare GitHub Pages deployment)
+        id: pages
+        uses: actions/configure-pages@v5
 
       - name: Build site
-        run: hugo --minify
+        run: |
+          # prefer npm build if a JS build pipeline exists, otherwise use Hugo
+          if [ -f package.json ] && npm run | grep -q "build"; then
+            npm run build
+          else
+            hugo --minify
+          fi
 
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          publish_dir: ./public
-          publish_branch: gh-pages
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          path: ./public
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
